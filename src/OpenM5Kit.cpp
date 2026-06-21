@@ -61,6 +61,7 @@ App::App(const DeviceProfile& profile)
               30000,
               5000,
               3000,
+              60000,
           }) {}
 
 App::App(const DeviceProfile& profile, const DashboardConfig& dashboardConfig)
@@ -70,7 +71,9 @@ App::App(const DeviceProfile& profile, const DashboardConfig& dashboardConfig)
       lastHelloMs_(0),
       lastEventMs_(0),
       lastMessageMs_(0),
+      lastInteractionMs_(0),
       wifiConnected_(false),
+      screenAwake_(true),
       screenDirty_(true),
       lastDisplayedBattery_(-1),
       lastDisplayedPostStatus_(0),
@@ -91,12 +94,25 @@ void App::begin() {
   M5.begin(cfg);
   M5.Display.setRotation(profile_.rotation);
   M5.Display.setTextDatum(top_left);
+  recordInteraction();
   beginNetwork();
   drawHomeScreen();
 }
 
 void App::update() {
   M5.update();
+  const unsigned long now = millis();
+
+  if (M5.Touch.getCount() > 0) {
+    if (!screenAwake_) {
+      wakeScreen();
+    }
+    recordInteraction();
+  }
+
+  if (M5.BtnPWR.wasClicked() && screenAwake_) {
+    sleepScreen();
+  }
 
   if (isDashboardConfigured(dashboardConfig_)) {
     const bool wasWifiConnected = wifiConnected_;
@@ -110,7 +126,6 @@ void App::update() {
       requestRedraw();
     }
 
-    const unsigned long now = millis();
     if (wifiConnected_ && now - lastHelloMs_ >= dashboardConfig_.helloIntervalMs) {
       sendHello();
     }
@@ -122,11 +137,17 @@ void App::update() {
     }
   }
 
-  const unsigned long now = millis();
-  const bool needsSlowStatusRefresh = now - lastDrawMs_ >= 30000;
+  const unsigned long sleepCheckMs = millis();
+  if (screenAwake_ && dashboardConfig_.screenTimeoutMs > 0 &&
+      sleepCheckMs - lastInteractionMs_ >= dashboardConfig_.screenTimeoutMs) {
+    sleepScreen();
+  }
+
+  const unsigned long redrawCheckMs = millis();
+  const bool needsSlowStatusRefresh = redrawCheckMs - lastDrawMs_ >= 30000;
   const bool batteryChanged =
       abs(M5.Power.getBatteryLevel() - lastDisplayedBattery_) >= 2;
-  if (screenDirty_ || needsSlowStatusRefresh || batteryChanged) {
+  if (screenAwake_ && (screenDirty_ || needsSlowStatusRefresh || batteryChanged)) {
     drawHomeScreen();
   }
 }
@@ -162,6 +183,10 @@ void App::beginNetwork() {
 }
 
 void App::drawHomeScreen() {
+  if (!screenAwake_) {
+    return;
+  }
+
   lastDrawMs_ = millis();
   screenDirty_ = false;
   lastDisplayedBattery_ = M5.Power.getBatteryLevel();
@@ -216,6 +241,33 @@ void App::drawHomeScreen() {
   M5.Display.setCursor(width - 96, height - 28);
   M5.Display.print("API ");
   M5.Display.print(lastDisplayedPostStatus_);
+}
+
+void App::sleepScreen() {
+  if (!screenAwake_) {
+    return;
+  }
+
+  screenAwake_ = false;
+  screenDirty_ = true;
+  M5.Display.sleep();
+  Serial.println("Display sleeping");
+}
+
+void App::wakeScreen() {
+  if (screenAwake_) {
+    return;
+  }
+
+  M5.Display.wakeup();
+  screenAwake_ = true;
+  recordInteraction();
+  requestRedraw();
+  Serial.println("Display awake");
+}
+
+void App::recordInteraction() {
+  lastInteractionMs_ = millis();
 }
 
 void App::requestRedraw() {
@@ -275,6 +327,8 @@ void App::fetchMessage() {
       currentMessage_ = responseBody.substring(0, 240);
       Serial.print("Received message: ");
       Serial.println(currentMessage_);
+      wakeScreen();
+      recordInteraction();
       requestRedraw();
     }
   }

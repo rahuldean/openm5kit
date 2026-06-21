@@ -91,6 +91,18 @@ The polling interval is configured in `OpenM5KitConfig.h`:
 #define OPENM5KIT_MESSAGE_INTERVAL_MS 3000
 ```
 
+## Screen Sleep
+
+CoreS3 keeps Wi-Fi and message polling active while the display is asleep.
+
+The display sleeps after the configured idle timeout:
+
+```cpp
+#define OPENM5KIT_SCREEN_TIMEOUT_MS 60000
+```
+
+Touching the screen wakes it. A new dashboard message also wakes the display and resets the idle timer.
+
 ## Troubleshooting `API: -1`
 
 `API: -1` means the device did not receive an HTTP response from the dashboard.

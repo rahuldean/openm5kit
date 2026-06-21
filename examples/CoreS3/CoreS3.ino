@@ -17,6 +17,7 @@ openm5kit::DashboardConfig dashboardConfig{
     OPENM5KIT_HELLO_INTERVAL_MS,
     OPENM5KIT_EVENT_INTERVAL_MS,
     OPENM5KIT_MESSAGE_INTERVAL_MS,
+    OPENM5KIT_SCREEN_TIMEOUT_MS,
 };
 
 openm5kit::App app(openm5kit::makeCoreS3Profile(), dashboardConfig);

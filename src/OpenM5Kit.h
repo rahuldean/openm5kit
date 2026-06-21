@@ -27,6 +27,7 @@ struct DashboardConfig {
   unsigned long helloIntervalMs;
   unsigned long eventIntervalMs;
   unsigned long messageIntervalMs;
+  unsigned long screenTimeoutMs;
 };
 
 class App {
@@ -40,6 +41,9 @@ class App {
  private:
   void beginNetwork();
   void drawHomeScreen();
+  void sleepScreen();
+  void wakeScreen();
+  void recordInteraction();
   void requestRedraw();
   void sendHello();
   void sendTelemetry();
@@ -55,7 +59,9 @@ class App {
   unsigned long lastHelloMs_;
   unsigned long lastEventMs_;
   unsigned long lastMessageMs_;
+  unsigned long lastInteractionMs_;
   bool wifiConnected_;
+  bool screenAwake_;
   bool screenDirty_;
   int lastDisplayedBattery_;
   int lastDisplayedPostStatus_;
