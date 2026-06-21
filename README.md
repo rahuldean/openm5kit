@@ -1,5 +1,5 @@
 # OpenM5Kit
-OpenM5Kit is an open source Arduino firmware starter kit for building, sharing, and deploying projects across M5Stack devices like the M5Stick and CoreS3.
+OpenM5Kit is an open source Arduino firmware starter kit and dashboard shell for building AI-capable M5Stack devices like the M5Stick and CoreS3.
 
 The project is structured as an Arduino library with device-specific example sketches:
 
@@ -8,6 +8,7 @@ src/                  Shared OpenM5Kit runtime code
 examples/M5Stick/     Deployable sketch for M5Stick-class devices
 examples/CoreS3/      Deployable sketch for M5Stack CoreS3
 docs/                 Setup and deployment notes
+dashboard/            Next.js control plane web app
 ```
 
 ## Supported Targets
@@ -24,3 +25,13 @@ docs/                 Setup and deployment notes
 5. Upload to the connected device.
 
 See [docs/setup.md](docs/setup.md) and [docs/deployment.md](docs/deployment.md) for details.
+
+## Dashboard
+
+The web dashboard shell lives in `dashboard/`. It is intended to become a control plane for receiving data from M5 devices, sending data back on demand, and routing AI requests through a LiteLLM proxy.
+
+```bash
+cd dashboard
+npm install
+npm run dev
+```
