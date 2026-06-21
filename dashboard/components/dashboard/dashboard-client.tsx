@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Cable,
   ChevronDown,
-  Circle,
   Cpu,
   Database,
   LayoutDashboard,
@@ -199,7 +198,7 @@ export function DashboardClient() {
               ))}
             </div>
 
-            <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
+            <div className="grid gap-4">
               <Card>
                 <CardHeader>
                   <CardTitle>Device Data</CardTitle>
@@ -300,34 +299,6 @@ export function DashboardClient() {
                       ))}
                     </div>
                   )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Connection</CardTitle>
-                  <CardDescription>CoreS3 local pairing path</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {[
-                    "Dashboard listens on your LAN",
-                    "CoreS3 connects to Wi-Fi",
-                    "Device posts hello with pairing code",
-                    "Telemetry posts every few seconds",
-                  ].map((item) => (
-                    <div
-                      className="flex items-start gap-3 rounded-md border bg-background p-3"
-                      key={item}
-                    >
-                      <Circle className="mt-1 h-3 w-3 fill-muted text-muted" />
-                      <div>
-                        <div className="text-sm font-medium">{item}</div>
-                        <div className="text-xs text-muted-foreground">
-                          Local development flow
-                        </div>
-                      </div>
-                    </div>
-                  ))}
                 </CardContent>
               </Card>
             </div>
