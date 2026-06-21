@@ -35,3 +35,5 @@ cd dashboard
 npm install
 npm run dev
 ```
+
+For CoreS3 Wi-Fi onboarding into the dashboard, see [docs/dashboard-onboarding.md](docs/dashboard-onboarding.md).

@@ -2,6 +2,7 @@
 
 #include <HTTPClient.h>
 #include <WiFi.h>
+#include <WiFiClient.h>
 
 namespace openm5kit {
 
@@ -68,9 +69,16 @@ App::App(const DeviceProfile& profile, const DashboardConfig& dashboardConfig)
       lastHelloMs_(0),
       lastEventMs_(0),
       wifiConnected_(false),
-      lastPostStatus_(0) {}
+      lastPostStatus_(0),
+      lastPostPath_("-"),
+      lastPostError_("-") {}
 
 void App::begin() {
+  Serial.begin(115200);
+  delay(200);
+  Serial.println();
+  Serial.println("OpenM5Kit boot");
+
   auto cfg = M5.config();
   M5.begin(cfg);
   M5.Display.setRotation(profile_.rotation);
@@ -111,6 +119,8 @@ void App::beginNetwork() {
   }
 
   WiFi.mode(WIFI_STA);
+  Serial.print("Connecting to WiFi SSID: ");
+  Serial.println(dashboardConfig_.wifiSsid);
   WiFi.begin(dashboardConfig_.wifiSsid, dashboardConfig_.wifiPassword);
 
   const unsigned long startedAt = millis();
@@ -121,8 +131,14 @@ void App::beginNetwork() {
 
   wifiConnected_ = WiFi.status() == WL_CONNECTED;
   if (wifiConnected_) {
+    Serial.print("WiFi connected. IP: ");
+    Serial.println(WiFi.localIP());
+    Serial.print("Dashboard: ");
+    Serial.println(dashboardConfig_.dashboardBaseUrl);
     sendHello();
     sendTelemetry();
+  } else {
+    Serial.println("WiFi connection timed out.");
   }
 }
 
@@ -175,6 +191,12 @@ void App::drawHomeScreen() {
   M5.Display.setCursor(8, 132);
   M5.Display.print("API: ");
   M5.Display.print(lastPostStatus_);
+
+  if (lastPostStatus_ < 0) {
+    M5.Display.setCursor(8, 148);
+    M5.Display.print("Err: ");
+    M5.Display.print(lastPostError_);
+  }
 }
 
 void App::sendHello() {
@@ -209,9 +231,9 @@ void App::sendTelemetry() {
   payload += ",\"freeHeap\":";
   payload += ESP.getFreeHeap();
   payload += ",\"buttonA\":";
-  payload += M5.BtnA.isPressed() ? "true" : "false";
+  payload += (M5.BtnA.isPressed() ? "true" : "false");
   payload += ",\"buttonB\":";
-  payload += M5.BtnB.isPressed() ? "true" : "false";
+  payload += (M5.BtnB.isPressed() ? "true" : "false");
   payload += "}";
 
   postJson("/api/devices/events", payload);
@@ -222,16 +244,54 @@ bool App::postJson(const char* path, const String& payload) {
     return false;
   }
 
+  WiFiClient client;
   HTTPClient http;
-  String url = dashboardConfig_.dashboardBaseUrl;
-  url += path;
+  String url = dashboardUrl(path);
+  lastPostPath_ = path;
 
-  http.begin(url);
+  http.setTimeout(5000);
+  http.useHTTP10(true);
+  if (!http.begin(client, url)) {
+    lastPostStatus_ = -1;
+    lastPostError_ = "http.begin failed";
+    Serial.print("Dashboard request failed: ");
+    Serial.println(lastPostError_);
+    return false;
+  }
   http.addHeader("Content-Type", "application/json");
+  http.addHeader("Connection", "close");
   lastPostStatus_ = http.POST(payload);
+  if (lastPostStatus_ < 0) {
+    lastPostError_ = http.errorToString(lastPostStatus_);
+  } else {
+    lastPostError_ = "OK";
+  }
+
+  if (lastPostStatus_ < 200 || lastPostStatus_ >= 300) {
+    Serial.print("Dashboard request failed: ");
+    Serial.print(lastPostPath_);
+    Serial.print(" status=");
+    Serial.print(lastPostStatus_);
+    Serial.print(" error=");
+    Serial.println(lastPostError_);
+  }
   http.end();
 
   return lastPostStatus_ >= 200 && lastPostStatus_ < 300;
+}
+
+String App::dashboardUrl(const char* path) const {
+  String baseUrl = dashboardConfig_.dashboardBaseUrl;
+  while (baseUrl.endsWith("/")) {
+    baseUrl.remove(baseUrl.length() - 1);
+  }
+
+  String normalizedPath = path;
+  if (!normalizedPath.startsWith("/")) {
+    normalizedPath = "/" + normalizedPath;
+  }
+
+  return baseUrl + normalizedPath;
 }
 
 DeviceProfile makeM5StickProfile() {

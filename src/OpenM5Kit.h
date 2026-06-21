@@ -42,6 +42,7 @@ class App {
   void sendHello();
   void sendTelemetry();
   bool postJson(const char* path, const String& payload);
+  String dashboardUrl(const char* path) const;
 
   DeviceProfile profile_;
   DashboardConfig dashboardConfig_;
@@ -50,6 +51,8 @@ class App {
   unsigned long lastEventMs_;
   bool wifiConnected_;
   int lastPostStatus_;
+  String lastPostPath_;
+  String lastPostError_;
 };
 
 DeviceProfile makeM5StickProfile();
