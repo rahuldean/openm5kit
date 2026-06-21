@@ -60,6 +60,7 @@ App::App(const DeviceProfile& profile)
               "0.1.0",
               30000,
               5000,
+              3000,
           }) {}
 
 App::App(const DeviceProfile& profile, const DashboardConfig& dashboardConfig)
@@ -68,10 +69,17 @@ App::App(const DeviceProfile& profile, const DashboardConfig& dashboardConfig)
       lastDrawMs_(0),
       lastHelloMs_(0),
       lastEventMs_(0),
+      lastMessageMs_(0),
       wifiConnected_(false),
+      screenDirty_(true),
+      lastDisplayedBattery_(-1),
+      lastDisplayedPostStatus_(0),
       lastPostStatus_(0),
+      lastMessageStatus_(0),
       lastPostPath_("-"),
-      lastPostError_("-") {}
+      lastPostError_("-"),
+      currentMessage_("Message Board Ready"),
+      lastMessageError_("-") {}
 
 void App::begin() {
   Serial.begin(115200);
@@ -91,11 +99,15 @@ void App::update() {
   M5.update();
 
   if (isDashboardConfigured(dashboardConfig_)) {
+    const bool wasWifiConnected = wifiConnected_;
     if (WiFi.status() != WL_CONNECTED) {
       wifiConnected_ = false;
       WiFi.reconnect();
     } else {
       wifiConnected_ = true;
+    }
+    if (wifiConnected_ != wasWifiConnected) {
+      requestRedraw();
     }
 
     const unsigned long now = millis();
@@ -105,10 +117,16 @@ void App::update() {
     if (wifiConnected_ && now - lastEventMs_ >= dashboardConfig_.eventIntervalMs) {
       sendTelemetry();
     }
+    if (wifiConnected_ && now - lastMessageMs_ >= dashboardConfig_.messageIntervalMs) {
+      fetchMessage();
+    }
   }
 
   const unsigned long now = millis();
-  if (now - lastDrawMs_ >= 1000) {
+  const bool needsSlowStatusRefresh = now - lastDrawMs_ >= 30000;
+  const bool batteryChanged =
+      abs(M5.Power.getBatteryLevel() - lastDisplayedBattery_) >= 2;
+  if (screenDirty_ || needsSlowStatusRefresh || batteryChanged) {
     drawHomeScreen();
   }
 }
@@ -137,6 +155,7 @@ void App::beginNetwork() {
     Serial.println(dashboardConfig_.dashboardBaseUrl);
     sendHello();
     sendTelemetry();
+    fetchMessage();
   } else {
     Serial.println("WiFi connection timed out.");
   }
@@ -144,59 +163,63 @@ void App::beginNetwork() {
 
 void App::drawHomeScreen() {
   lastDrawMs_ = millis();
+  screenDirty_ = false;
+  lastDisplayedBattery_ = M5.Power.getBatteryLevel();
+  lastDisplayedPostStatus_ = lastPostStatus_;
+
+  const int width = M5.Display.width();
+  const int height = M5.Display.height();
 
   M5.Display.fillScreen(TFT_BLACK);
-  M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-  M5.Display.setTextSize(2);
-  M5.Display.setCursor(8, 8);
+  M5.Display.fillRoundRect(8, 8, width - 16, 34, 8, TFT_DARKGREY);
+  M5.Display.setTextColor(TFT_WHITE, TFT_DARKGREY);
+  M5.Display.setTextSize(1);
+  M5.Display.setCursor(18, 20);
   M5.Display.print("OpenM5Kit");
 
+  M5.Display.setCursor(width - 96, 20);
+  M5.Display.print(wifiConnected_ ? "Online" : "Offline");
+
+  M5.Display.fillRoundRect(8, 52, width - 16, height - 92, 10, TFT_WHITE);
+  M5.Display.setTextColor(TFT_BLACK, TFT_WHITE);
+  M5.Display.setTextSize(2);
+  M5.Display.setCursor(22, 70);
+  M5.Display.print("Message");
+
+  M5.Display.setTextSize(2);
+  M5.Display.setCursor(22, 108);
+  String message = currentMessage_;
+  const int maxCharsPerLine = max(8, (width - 44) / 12);
+  int line = 0;
+  while (message.length() > 0 && line < 5) {
+    int take = min(maxCharsPerLine, static_cast<int>(message.length()));
+    int breakIndex = message.lastIndexOf(' ', take);
+    if (breakIndex <= 0 || take == static_cast<int>(message.length())) {
+      breakIndex = take;
+    }
+
+    String chunk = message.substring(0, breakIndex);
+    chunk.trim();
+    M5.Display.setCursor(22, 108 + line * 26);
+    M5.Display.print(chunk);
+    message = message.substring(breakIndex);
+    message.trim();
+    line++;
+  }
+
+  M5.Display.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
   M5.Display.setTextSize(1);
-  M5.Display.setCursor(8, 36);
-  M5.Display.print("Target: ");
-  M5.Display.print(profile_.name);
-
-  M5.Display.setCursor(8, 52);
-  M5.Display.print("Family: ");
-  M5.Display.print(targetLabel(profile_.target));
-
-  M5.Display.setCursor(8, 68);
-  M5.Display.print("Uptime: ");
-  M5.Display.print(lastDrawMs_ / 1000);
-  M5.Display.print("s");
-
-  M5.Display.setCursor(8, 84);
-  M5.Display.print("Battery: ");
-  M5.Display.print(M5.Power.getBatteryLevel());
+  M5.Display.setCursor(12, height - 28);
+  M5.Display.print("Battery ");
+  M5.Display.print(lastDisplayedBattery_);
   M5.Display.print("%");
+  M5.Display.setCursor(width - 96, height - 28);
+  M5.Display.print("API ");
+  M5.Display.print(lastDisplayedPostStatus_);
+}
 
-  M5.Display.setCursor(8, 100);
-  M5.Display.print("WiFi: ");
-  if (!isDashboardConfigured(dashboardConfig_)) {
-    M5.Display.print("not configured");
-  } else if (wifiConnected_) {
-    M5.Display.print(WiFi.localIP());
-  } else {
-    M5.Display.print("disconnected");
-  }
-
-  M5.Display.setCursor(8, 116);
-  M5.Display.print("Pair: ");
-  if (hasValue(dashboardConfig_.pairingCode)) {
-    M5.Display.print(dashboardConfig_.pairingCode);
-  } else {
-    M5.Display.print("-");
-  }
-
-  M5.Display.setCursor(8, 132);
-  M5.Display.print("API: ");
-  M5.Display.print(lastPostStatus_);
-
-  if (lastPostStatus_ < 0) {
-    M5.Display.setCursor(8, 148);
-    M5.Display.print("Err: ");
-    M5.Display.print(lastPostError_);
-  }
+void App::requestRedraw() {
+  screenDirty_ = true;
 }
 
 void App::sendHello() {
@@ -239,6 +262,24 @@ void App::sendTelemetry() {
   postJson("/api/devices/events", payload);
 }
 
+void App::fetchMessage() {
+  lastMessageMs_ = millis();
+
+  String responseBody;
+  const int status = getText(messagePath().c_str(), responseBody);
+  lastMessageStatus_ = status;
+
+  if (status == 200) {
+    responseBody.trim();
+    if (responseBody.length() > 0) {
+      currentMessage_ = responseBody.substring(0, 240);
+      Serial.print("Received message: ");
+      Serial.println(currentMessage_);
+      requestRedraw();
+    }
+  }
+}
+
 bool App::postJson(const char* path, const String& payload) {
   if (!wifiConnected_) {
     return false;
@@ -266,6 +307,9 @@ bool App::postJson(const char* path, const String& payload) {
   } else {
     lastPostError_ = "OK";
   }
+  if (lastPostStatus_ != lastDisplayedPostStatus_) {
+    requestRedraw();
+  }
 
   if (lastPostStatus_ < 200 || lastPostStatus_ >= 300) {
     Serial.print("Dashboard request failed: ");
@@ -280,6 +324,40 @@ bool App::postJson(const char* path, const String& payload) {
   return lastPostStatus_ >= 200 && lastPostStatus_ < 300;
 }
 
+int App::getText(const char* path, String& responseBody) {
+  if (!wifiConnected_) {
+    return -1;
+  }
+
+  WiFiClient client;
+  HTTPClient http;
+  String url = dashboardUrl(path);
+
+  http.setTimeout(5000);
+  http.useHTTP10(true);
+  if (!http.begin(client, url)) {
+    lastMessageError_ = "http.begin failed";
+    Serial.print("Message request failed: ");
+    Serial.println(lastMessageError_);
+    return -1;
+  }
+
+  http.addHeader("Connection", "close");
+  const int status = http.GET();
+  if (status == 200) {
+    responseBody = http.getString();
+  } else if (status < 0) {
+    lastMessageError_ = http.errorToString(status);
+    Serial.print("Message request failed: status=");
+    Serial.print(status);
+    Serial.print(" error=");
+    Serial.println(lastMessageError_);
+  }
+
+  http.end();
+  return status;
+}
+
 String App::dashboardUrl(const char* path) const {
   String baseUrl = dashboardConfig_.dashboardBaseUrl;
   while (baseUrl.endsWith("/")) {
@@ -292,6 +370,13 @@ String App::dashboardUrl(const char* path) const {
   }
 
   return baseUrl + normalizedPath;
+}
+
+String App::messagePath() const {
+  String path = "/api/devices/";
+  path += dashboardConfig_.deviceId;
+  path += "/message";
+  return path;
 }
 
 DeviceProfile makeM5StickProfile() {

@@ -11,6 +11,13 @@ export type DeviceEvent = {
   raw: Record<string, unknown>;
 };
 
+export type DeviceMessage = {
+  id: string;
+  text: string;
+  createdAt: string;
+  deliveredAt?: string;
+};
+
 export type DeviceRecord = {
   deviceId: string;
   deviceType: string;
@@ -25,6 +32,8 @@ export type DeviceRecord = {
   lastSeenAt: string;
   status: "online" | "offline";
   events: DeviceEvent[];
+  messages: DeviceMessage[];
+  pendingMessage?: DeviceMessage;
 };
 
 type Store = {
@@ -80,6 +89,8 @@ export function recordHello(payload: Record<string, unknown>) {
     lastSeenAt: now,
     status: "online",
     events: current?.events ?? [],
+    messages: current?.messages ?? [],
+    pendingMessage: current?.pendingMessage,
   };
 
   store.devices.set(deviceId, device);
@@ -113,4 +124,42 @@ export function listDevices() {
       status: statusFor(device.lastSeenAt),
     }))
     .sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt));
+}
+
+export function queueMessage(deviceId: string, text: string) {
+  const current = store.devices.get(deviceId);
+  if (!current) {
+    return null;
+  }
+
+  const message: DeviceMessage = {
+    id: `${deviceId}-${Date.now()}`,
+    text,
+    createdAt: new Date().toISOString(),
+  };
+
+  current.pendingMessage = message;
+  current.messages = [message, ...current.messages].slice(0, 20);
+  store.devices.set(deviceId, current);
+  return message;
+}
+
+export function consumePendingMessage(deviceId: string) {
+  const current = store.devices.get(deviceId);
+  if (!current?.pendingMessage) {
+    return null;
+  }
+
+  const message = {
+    ...current.pendingMessage,
+    deliveredAt: new Date().toISOString(),
+  };
+
+  current.pendingMessage = undefined;
+  current.messages = current.messages.map((item) =>
+    item.id === message.id ? message : item,
+  );
+  store.devices.set(deviceId, current);
+
+  return message;
 }

@@ -26,6 +26,7 @@ struct DashboardConfig {
   const char* firmwareVersion;
   unsigned long helloIntervalMs;
   unsigned long eventIntervalMs;
+  unsigned long messageIntervalMs;
 };
 
 class App {
@@ -39,20 +40,31 @@ class App {
  private:
   void beginNetwork();
   void drawHomeScreen();
+  void requestRedraw();
   void sendHello();
   void sendTelemetry();
+  void fetchMessage();
   bool postJson(const char* path, const String& payload);
+  int getText(const char* path, String& responseBody);
   String dashboardUrl(const char* path) const;
+  String messagePath() const;
 
   DeviceProfile profile_;
   DashboardConfig dashboardConfig_;
   unsigned long lastDrawMs_;
   unsigned long lastHelloMs_;
   unsigned long lastEventMs_;
+  unsigned long lastMessageMs_;
   bool wifiConnected_;
+  bool screenDirty_;
+  int lastDisplayedBattery_;
+  int lastDisplayedPostStatus_;
   int lastPostStatus_;
+  int lastMessageStatus_;
   String lastPostPath_;
   String lastPostError_;
+  String currentMessage_;
+  String lastMessageError_;
 };
 
 DeviceProfile makeM5StickProfile();

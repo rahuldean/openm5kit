@@ -85,11 +85,23 @@ function statusBadgeClass(status: DeviceRecord["status"]) {
 export function DashboardClient() {
   const [devices, setDevices] = useState<DeviceRecord[]>([]);
   const [lastRefreshAt, setLastRefreshAt] = useState<string | null>(null);
+  const [messageTextByDevice, setMessageTextByDevice] = useState<
+    Record<string, string>
+  >({});
+  const [sendingDeviceId, setSendingDeviceId] = useState<string | null>(null);
+
+  async function loadDevices() {
+    const response = await fetch("/api/devices", { cache: "no-store" });
+    const payload = (await response.json()) as { devices: DeviceRecord[] };
+
+    setDevices(payload.devices);
+    setLastRefreshAt(new Date().toISOString());
+  }
 
   useEffect(() => {
     let active = true;
 
-    async function loadDevices() {
+    async function loadDevicesIfActive() {
       const response = await fetch("/api/devices", { cache: "no-store" });
       const payload = (await response.json()) as { devices: DeviceRecord[] };
 
@@ -99,14 +111,44 @@ export function DashboardClient() {
       }
     }
 
-    loadDevices();
-    const interval = window.setInterval(loadDevices, 3000);
+    loadDevicesIfActive();
+    const interval = window.setInterval(loadDevicesIfActive, 3000);
 
     return () => {
       active = false;
       window.clearInterval(interval);
     };
   }, []);
+
+  async function sendMessage(deviceId: string) {
+    const text = messageTextByDevice[deviceId]?.trim();
+    if (!text) {
+      return;
+    }
+
+    setSendingDeviceId(deviceId);
+    try {
+      const response = await fetch(`/api/devices/${deviceId}/message`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Message request failed with ${response.status}`);
+      }
+
+      setMessageTextByDevice((current) => ({
+        ...current,
+        [deviceId]: "",
+      }));
+      await loadDevices();
+    } finally {
+      setSendingDeviceId(null);
+    }
+  }
 
   const latestEvent = devices.flatMap((device) => device.events)[0];
   const onlineCount = devices.filter((device) => device.status === "online").length;
@@ -315,6 +357,47 @@ export function DashboardClient() {
                               </div>
                             </div>
                           ) : null}
+
+                          <div className="mt-4 rounded-md border bg-muted/20 p-3">
+                            <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm font-medium">Message board</div>
+                                <textarea
+                                  className="mt-2 min-h-20 w-full resize-none rounded-md border bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
+                                  maxLength={240}
+                                  onChange={(event) =>
+                                    setMessageTextByDevice((current) => ({
+                                      ...current,
+                                      [device.deviceId]: event.target.value,
+                                    }))
+                                  }
+                                  placeholder="Send a short message to this device"
+                                  value={messageTextByDevice[device.deviceId] ?? ""}
+                                />
+                              </div>
+                              <div className="flex flex-col gap-2 lg:w-48">
+                                <Button
+                                  disabled={
+                                    !messageTextByDevice[device.deviceId]?.trim() ||
+                                    sendingDeviceId === device.deviceId
+                                  }
+                                  onClick={() => sendMessage(device.deviceId)}
+                                  type="button"
+                                >
+                                  Send message
+                                </Button>
+                                <div className="text-xs text-muted-foreground">
+                                  {device.pendingMessage
+                                    ? "Waiting for device pickup"
+                                    : device.messages[0]
+                                      ? `Last sent ${formatRelativeTime(
+                                          device.messages[0].createdAt,
+                                        )}`
+                                      : "No messages sent"}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>

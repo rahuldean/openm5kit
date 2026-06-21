@@ -75,6 +75,22 @@ The CoreS3 display should show:
 
 The dashboard should show the device under **Device Data** after the first hello and telemetry posts arrive.
 
+## Message Board
+
+The dashboard can queue a short message for a connected device. CoreS3 polls:
+
+```text
+GET /api/devices/:deviceId/message
+```
+
+When a message is available, the dashboard returns it as plain text and marks it delivered. The CoreS3 displays the message on the main device screen.
+
+The polling interval is configured in `OpenM5KitConfig.h`:
+
+```cpp
+#define OPENM5KIT_MESSAGE_INTERVAL_MS 3000
+```
+
 ## Troubleshooting `API: -1`
 
 `API: -1` means the device did not receive an HTTP response from the dashboard.
@@ -99,6 +115,8 @@ The device posts to:
 POST /api/devices/hello
 POST /api/devices/events
 GET  /api/devices
+GET  /api/devices/:deviceId/message
+POST /api/devices/:deviceId/message
 ```
 
 The dashboard currently stores device data in memory. Restarting the dev server clears the device list.
