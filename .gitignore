@@ -9,3 +9,5 @@ dist/
 .idea/
 dashboard/.next/
 dashboard/node_modules/
+dashboard/tsconfig.tsbuildinfo
+examples/*/OpenM5KitConfig.h
