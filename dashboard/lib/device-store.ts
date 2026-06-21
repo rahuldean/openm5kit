@@ -6,8 +6,7 @@ export type DeviceEvent = {
   rssi?: number;
   uptimeMs?: number;
   freeHeap?: number;
-  buttonA?: boolean;
-  buttonB?: boolean;
+  heapSize?: number;
   raw: Record<string, unknown>;
 };
 
@@ -58,10 +57,6 @@ function numberValue(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-function booleanValue(value: unknown) {
-  return typeof value === "boolean" ? value : undefined;
-}
-
 function statusFor(lastSeenAt: string): DeviceRecord["status"] {
   const lastSeenMs = new Date(lastSeenAt).getTime();
   return Date.now() - lastSeenMs > 15000 ? "offline" : "online";
@@ -107,8 +102,7 @@ export function recordEvent(payload: Record<string, unknown>) {
     rssi: numberValue(payload.rssi),
     uptimeMs: numberValue(payload.uptimeMs),
     freeHeap: numberValue(payload.freeHeap),
-    buttonA: booleanValue(payload.buttonA),
-    buttonB: booleanValue(payload.buttonB),
+    heapSize: numberValue(payload.heapSize),
     raw: payload,
   };
 

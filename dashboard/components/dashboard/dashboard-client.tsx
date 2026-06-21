@@ -1,31 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Cable,
-  ChevronDown,
-  Cpu,
   Database,
   LayoutDashboard,
   MessageSquareText,
   Network,
   Radio,
-  Search,
   Settings,
-  Sparkles,
   Terminal,
-  UploadCloud,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import type { DeviceRecord } from "@/lib/device-store";
 
@@ -66,12 +55,19 @@ function formatUptime(value?: number) {
   return `${minutes}m ${seconds}s`;
 }
 
-function formatButtonState(value?: boolean) {
-  if (typeof value !== "boolean") {
-    return "unknown";
+function formatHeap(freeHeap?: number, heapSize?: number) {
+  if (typeof freeHeap !== "number") {
+    return "-";
   }
 
-  return value ? "pressed" : "released";
+  const freeKb = freeHeap / 1024;
+
+  if (typeof heapSize !== "number" || heapSize <= 0) {
+    return `${Math.round(freeKb)} KB`;
+  }
+
+  const percent = Math.round((freeHeap / heapSize) * 100);
+  return `${Math.round(freeKb)} KB (${percent}%)`;
 }
 
 function statusBadgeClass(status: DeviceRecord["status"]) {
@@ -150,19 +146,6 @@ export function DashboardClient() {
     }
   }
 
-  const latestEvent = devices.flatMap((device) => device.events)[0];
-  const onlineCount = devices.filter((device) => device.status === "online").length;
-
-  const statCards = useMemo(
-    () => [
-      { label: "Incoming signals", value: String(latestEvent ? devices.length : 0), icon: Radio },
-      { label: "Queued pushes", value: "0", icon: UploadCloud },
-      { label: "AI routes", value: "0", icon: Sparkles },
-      { label: "Online devices", value: String(onlineCount), icon: Cpu },
-    ],
-    [devices.length, latestEvent, onlineCount],
-  );
-
   return (
     <main className="min-h-screen bg-muted/30 text-foreground">
       <div className="grid min-h-screen lg:grid-cols-[260px_1fr]">
@@ -209,202 +192,148 @@ export function DashboardClient() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <Button className="hidden sm:inline-flex" variant="outline">
-                <Search className="h-4 w-4" />
-                Search
-              </Button>
-              <Button>
-                Workspace
-                <ChevronDown className="h-4 w-4" />
-              </Button>
+            <div className="text-xs text-muted-foreground">
+              {lastRefreshAt ? `Updated ${formatRelativeTime(lastRefreshAt)}` : ""}
             </div>
           </header>
 
-          <div className="flex-1 space-y-6 p-4 sm:p-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-semibold tracking-normal">
-                    AI Device Plane
-                  </h2>
-                  <Badge>Local</Badge>
+          <div className="flex-1 space-y-5 p-4 sm:p-6">
+            <div>
+              <h2 className="text-xl font-semibold tracking-normal">Devices</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Connected M5 devices and the latest data they have reported.
+              </p>
+            </div>
+
+            {devices.length === 0 ? (
+              <div className="flex min-h-[300px] items-center justify-center rounded-md border border-dashed bg-background">
+                <div className="max-w-sm text-center">
+                  <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-md border bg-background">
+                    <Database className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <h3 className="mt-4 text-sm font-medium">No devices reporting</h3>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Start the dashboard on your LAN, flash CoreS3 with Wi-Fi config,
+                    and telemetry will appear here.
+                  </p>
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Receive data from M5 devices and push AI responses back on demand.
-                </p>
               </div>
-              <Button>
-                <Sparkles className="h-4 w-4" />
-                Configure AI route
-              </Button>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {statCards.map((stat) => (
-                <Card key={stat.label}>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      {stat.label}
-                    </CardTitle>
-                    <stat.icon className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-semibold">{stat.value}</div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            <div className="grid gap-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Device Data</CardTitle>
-                  <CardDescription>
-                    {lastRefreshAt
-                      ? `Updated ${formatRelativeTime(lastRefreshAt)}`
-                      : "Waiting for dashboard refresh"}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {devices.length === 0 ? (
-                    <div className="flex min-h-[300px] items-center justify-center rounded-md border border-dashed bg-muted/30">
-                      <div className="max-w-sm text-center">
-                        <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-md border bg-background">
-                          <Database className="h-5 w-5 text-muted-foreground" />
+            ) : (
+              <div className="grid gap-4">
+                {devices.map((device) => (
+                  <Card key={device.deviceId}>
+                    <CardHeader>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <CardTitle>{device.deviceName}</CardTitle>
+                            <Badge className={statusBadgeClass(device.status)}>
+                              {device.status}
+                            </Badge>
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {device.deviceId} · {device.deviceType} · firmware{" "}
+                            {device.firmwareVersion}
+                          </p>
                         </div>
-                        <h3 className="mt-4 text-sm font-medium">
-                          No device data received
-                        </h3>
-                        <p className="mt-2 text-sm text-muted-foreground">
-                          Start the dashboard on your LAN, flash CoreS3 with Wi-Fi config,
-                          and telemetry will appear here.
-                        </p>
+                        <div className="text-xs text-muted-foreground">
+                          Last seen {formatRelativeTime(device.lastSeenAt)}
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {devices.map((device) => (
-                        <div
-                          className="rounded-md border bg-background p-4"
-                          key={device.deviceId}
-                        >
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h3 className="text-sm font-semibold">
-                                  {device.deviceName}
-                                </h3>
-                                <Badge className={statusBadgeClass(device.status)}>
-                                  {device.status}
-                                </Badge>
-                              </div>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {device.deviceId} · {device.deviceType} · firmware{" "}
-                                {device.firmwareVersion}
-                              </p>
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              Last seen {formatRelativeTime(device.lastSeenAt)}
-                            </div>
-                          </div>
+                    </CardHeader>
 
-                          <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
-                            <Metric label="Pairing code" value={device.pairingCode || "-"} />
-                            <Metric label="IP address" value={device.ipAddress || "-"} />
+                    <CardContent>
+                      <div className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                        <Metric label="Pairing code" value={device.pairingCode || "-"} />
+                        <Metric label="IP address" value={device.ipAddress || "-"} />
+                        <Metric
+                          label="Battery"
+                          value={
+                            typeof device.battery === "number"
+                              ? `${device.battery}%`
+                              : "-"
+                          }
+                        />
+                        <Metric
+                          label="RSSI"
+                          value={
+                            typeof device.rssi === "number" ? `${device.rssi} dBm` : "-"
+                          }
+                        />
+                      </div>
+
+                      <Separator className="my-4" />
+
+                      <div>
+                        <div className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
+                          Latest telemetry
+                        </div>
+                        {device.events[0] ? (
+                          <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
                             <Metric
-                              label="Battery"
-                              value={
-                                typeof device.battery === "number"
-                                  ? `${device.battery}%`
-                                  : "-"
-                              }
+                              label="Uptime"
+                              value={formatUptime(device.events[0].uptimeMs)}
                             />
                             <Metric
-                              label="RSSI"
-                              value={
-                                typeof device.rssi === "number" ? `${device.rssi} dBm` : "-"
-                              }
+                              label="Free heap"
+                              value={formatHeap(
+                                device.events[0].freeHeap,
+                                device.events[0].heapSize,
+                              )}
                             />
                           </div>
+                        ) : (
+                          <div className="mt-3 text-sm text-muted-foreground">
+                            No telemetry event received yet.
+                          </div>
+                        )}
+                      </div>
 
-                          {device.events[0] ? (
-                            <div className="mt-4 rounded-md bg-muted/50 p-3">
-                              <div className="text-xs font-medium text-muted-foreground">
-                                Latest telemetry
-                              </div>
-                              <div className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
-                                <Metric
-                                  label="Uptime"
-                                  value={formatUptime(device.events[0].uptimeMs)}
-                                />
-                                <Metric
-                                  label="Free heap"
-                                  value={
-                                    typeof device.events[0].freeHeap === "number"
-                                      ? String(device.events[0].freeHeap)
-                                      : "-"
-                                  }
-                                />
-                                <Metric
-                                  label="CoreS3 buttons"
-                                  value={`A: ${formatButtonState(
-                                    device.events[0].buttonA,
-                                  )} · B: ${formatButtonState(
-                                    device.events[0].buttonB,
-                                  )}`}
-                                />
-                              </div>
-                            </div>
-                          ) : null}
+                      <Separator className="my-4" />
 
-                          <div className="mt-4 rounded-md border bg-muted/20 p-3">
-                            <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
-                              <div className="min-w-0 flex-1">
-                                <div className="text-sm font-medium">Message board</div>
-                                <textarea
-                                  className="mt-2 min-h-20 w-full resize-none rounded-md border bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-                                  maxLength={240}
-                                  onChange={(event) =>
-                                    setMessageTextByDevice((current) => ({
-                                      ...current,
-                                      [device.deviceId]: event.target.value,
-                                    }))
-                                  }
-                                  placeholder="Send a short message to this device"
-                                  value={messageTextByDevice[device.deviceId] ?? ""}
-                                />
-                              </div>
-                              <div className="flex flex-col gap-2 lg:w-48">
-                                <Button
-                                  disabled={
-                                    !messageTextByDevice[device.deviceId]?.trim() ||
-                                    sendingDeviceId === device.deviceId
-                                  }
-                                  onClick={() => sendMessage(device.deviceId)}
-                                  type="button"
-                                >
-                                  Send message
-                                </Button>
-                                <div className="text-xs text-muted-foreground">
-                                  {device.pendingMessage
-                                    ? "Waiting for device pickup"
-                                    : device.messages[0]
-                                      ? `Last sent ${formatRelativeTime(
-                                          device.messages[0].createdAt,
-                                        )}`
-                                      : "No messages sent"}
-                                </div>
-                              </div>
-                            </div>
+                      <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium">Message board</div>
+                          <textarea
+                            className="mt-2 min-h-20 w-full resize-none rounded-md border bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
+                            maxLength={240}
+                            onChange={(event) =>
+                              setMessageTextByDevice((current) => ({
+                                ...current,
+                                [device.deviceId]: event.target.value,
+                              }))
+                            }
+                            placeholder="Send a short message to this device"
+                            value={messageTextByDevice[device.deviceId] ?? ""}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2 xl:w-48">
+                          <Button
+                            disabled={
+                              !messageTextByDevice[device.deviceId]?.trim() ||
+                              sendingDeviceId === device.deviceId
+                            }
+                            onClick={() => sendMessage(device.deviceId)}
+                            type="button"
+                          >
+                            Send message
+                          </Button>
+                          <div className="text-xs text-muted-foreground">
+                            {device.pendingMessage
+                              ? "Waiting for device pickup"
+                              : device.messages[0]
+                                ? `Last sent ${formatRelativeTime(
+                                    device.messages[0].createdAt,
+                                  )}`
+                                : "No messages sent"}
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </div>
         </section>
       </div>

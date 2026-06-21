@@ -305,10 +305,8 @@ void App::sendTelemetry() {
   payload += millis();
   payload += ",\"freeHeap\":";
   payload += ESP.getFreeHeap();
-  payload += ",\"buttonA\":";
-  payload += (M5.BtnA.isPressed() ? "true" : "false");
-  payload += ",\"buttonB\":";
-  payload += (M5.BtnB.isPressed() ? "true" : "false");
+  payload += ",\"heapSize\":";
+  payload += ESP.getHeapSize();
   payload += "}";
 
   postJson("/api/devices/events", payload);
