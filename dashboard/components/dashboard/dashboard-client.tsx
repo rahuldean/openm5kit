@@ -66,6 +66,22 @@ function formatUptime(value?: number) {
   return `${minutes}m ${seconds}s`;
 }
 
+function formatButtonState(value?: boolean) {
+  if (typeof value !== "boolean") {
+    return "unknown";
+  }
+
+  return value ? "pressed" : "released";
+}
+
+function statusBadgeClass(status: DeviceRecord["status"]) {
+  if (status === "online") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  return "border-border bg-muted text-muted-foreground";
+}
+
 export function DashboardClient() {
   const [devices, setDevices] = useState<DeviceRecord[]>([]);
   const [lastRefreshAt, setLastRefreshAt] = useState<string | null>(null);
@@ -237,7 +253,9 @@ export function DashboardClient() {
                                 <h3 className="text-sm font-semibold">
                                   {device.deviceName}
                                 </h3>
-                                <Badge>{device.status}</Badge>
+                                <Badge className={statusBadgeClass(device.status)}>
+                                  {device.status}
+                                </Badge>
                               </div>
                               <p className="mt-1 text-xs text-muted-foreground">
                                 {device.deviceId} · {device.deviceType} · firmware{" "}
@@ -287,10 +305,12 @@ export function DashboardClient() {
                                   }
                                 />
                                 <Metric
-                                  label="Buttons"
-                                  value={`A ${device.events[0].buttonA ? "down" : "up"} · B ${
-                                    device.events[0].buttonB ? "down" : "up"
-                                  }`}
+                                  label="CoreS3 buttons"
+                                  value={`A: ${formatButtonState(
+                                    device.events[0].buttonA,
+                                  )} · B: ${formatButtonState(
+                                    device.events[0].buttonB,
+                                  )}`}
                                 />
                               </div>
                             </div>

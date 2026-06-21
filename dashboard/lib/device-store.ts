@@ -23,7 +23,7 @@ export type DeviceRecord = {
   uptimeMs?: number;
   firstSeenAt: string;
   lastSeenAt: string;
-  status: "online" | "stale";
+  status: "online" | "offline";
   events: DeviceEvent[];
 };
 
@@ -55,7 +55,7 @@ function booleanValue(value: unknown) {
 
 function statusFor(lastSeenAt: string): DeviceRecord["status"] {
   const lastSeenMs = new Date(lastSeenAt).getTime();
-  return Date.now() - lastSeenMs > 45000 ? "stale" : "online";
+  return Date.now() - lastSeenMs > 15000 ? "offline" : "online";
 }
 
 export function recordHello(payload: Record<string, unknown>) {
